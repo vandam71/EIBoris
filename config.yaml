@@ -1,0 +1,19 @@
+Boris:
+  segmentation: K:\Dataset\masks
+  classification: K:\Dataset\pneumonia
+  size: [224, 224]
+  # num_classes: 3
+  Computation:
+    Bottom:
+      attention: true
+      net_type: resnet50
+      use_segmentation: true
+    Top:
+      min_samples_split: 4
+      max_depth: None
+  Storage:
+    wm_size: 7
+Training:
+  epochs: [8, 16]
+  save_file: trained_pneumonia_224_8_16.boris
+  batch_size: 32
