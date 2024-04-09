@@ -161,4 +161,4 @@ cython_debug/
 
 
 # Dataset
-./medical_mnist
+medical_mnist/

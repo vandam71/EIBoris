@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 import torch.nn as nn
 from ls import LearningSystem
-from .resnet_mem import ResNet
+from .resnet import ResNet
 from utils import ignore_warning
 from torch.utils.data import DataLoader
 

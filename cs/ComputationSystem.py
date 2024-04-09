@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from .tl import TopLevel
 from .bl import BottomLevel
+from ss import StorageSystem
 from typing import Tuple, List
 from torch.utils.data import DataLoader
 
@@ -31,8 +32,8 @@ class ComputationSystem(object):
         self._bl.fit(segmentation, classification)  # fits the bottom level to the datasets given
         with torch.no_grad():  # no need to compute gradients
             X, y = self._bl(classification[0])  # forwards the bottom-level with the training data
-        X = X.cpu().numpy()  # converts the tensors to arrays
-        y = y.cpu().numpy().astype(int)
+        X: torch.Tensor = X.cpu().numpy()  # converts the tensors to arrays
+        y: torch.Tensor = y.cpu().numpy().astype(int)
         self._tl.fit(X, y)  # fits the top-level with the training data from the bottom-level
         self._bl.train(False)  # sets the bottom level to inference mode
 
@@ -46,6 +47,8 @@ class ComputationSystem(object):
         with torch.no_grad():  # no need to compute gradients
             probability: torch.Tensor = self._bl(X)  # forwards the bottom-level
         probability = probability.cpu().tolist()[0]  # converts the probability tensor to a list
+        StorageSystem().most_recent_node.data.probabilities = probability  # updates the probabilities in the memory node
         labels: np.ndarray = self._tl(np.array(probability))  # forwards the probability in the top-level
+        StorageSystem().most_recent_node.data.classification = labels  # updates the classifications in the memory node
         labels = labels.tolist()[0]  # converts the labels numpy array to a list
         return (probability, labels)

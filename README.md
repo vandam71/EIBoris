@@ -9,7 +9,11 @@ The original BorisCAD version is released as V1.0.0.
 
 - [ ] Change metrics to Pytorch Ignite
 - [ ] Update config.yaml parsing to support missing arguments (e.g. training without segmentation or resuming previous saved training)
+  - [x] Disable segmentation (changed it to also support the same number of epochs for each model or only int epochs)
+  - [ ] Resume previous training based on a saved file
+- [ ] Try to add LMS weighting to the full system influence as proposed
 - [ ] Train memory in X images as part of the training process
+- [ ] Rework how the feature maps are accessed from within the ResNet model
 
 ### EIBoris Branch
 

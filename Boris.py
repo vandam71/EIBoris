@@ -5,7 +5,7 @@ from ss import StorageSystem
 from ls import LearningSystem
 from cs import ComputationSystem
 from torch.utils.data import DataLoader
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional, List, Union
 from utils import ImageMaskDataset, CustomDataset, ConfigParser
 
 
@@ -36,7 +36,7 @@ class Boris(object):
             min_samples_split (int, optional): Minimum number of samples required to split a node in ComputationSystem. Defaults to 8.
             max_depth (int, optional): Maximum depth of the decision tree in ComputationSystem. Defaults to None.
         """
-        self.seg_data = ImageMaskDataset(segmentation, size) if segmentation else None  # Initialize segmentation dataset if provided
+        self.seg_data = ImageMaskDataset(segmentation, size) if segmentation and use_segmentation else None  # Initialize segmentation dataset if provided
         self.class_data = CustomDataset(classification, size) if classification else None  # Initialize classification dataset if provided
         assert self.class_data or num_classes  # Ensure that either classification dataset or number of classes is provided
         # Initialize the subsystems
@@ -66,6 +66,7 @@ class Boris(object):
         Returns:
             list: Final decision based on probabilities, labels, and working memory influence.
         """
+        # TODO: this needs to be updated to LMS computation and have somekind of training process
         (probabilities, labels) = self._cs(X)  # Call the ComputationSystem to obtain probabilities and labels
         wm_influence = self._ss.working_memory.get_influence()  # Get the influence from the working memory
         alpha, beta, omega = 0.33, 0.33, 0.33  # Define weights for combining the outputs
@@ -73,17 +74,25 @@ class Boris(object):
         StorageSystem().most_recent_node.data.final_decision = ((np.array(probabilities) * alpha + np.array(labels) * beta + np.array(wm_influence) * omega) / 3).tolist()
         return StorageSystem().most_recent_node.data.final_decision  # Return the final decision
 
-    def fit(self, epochs: Tuple[int, int], batch_size: int = 32) -> None:
+    def fit(self, epochs: Union[Tuple[int, int], int], batch_size: int = 32) -> None:
         """Trains the model on the provided datasets.
         Args:
             epochs (Tuple[int, int]): The number of epochs to train the segmentation and classification models.
             batch_size (int, optional): The batch size for training. Defaults to 32.
         """
         # Create dataloaders for image masks and image labels
-        imagemask_dataloader = DataLoader(self.seg_data, batch_size=batch_size, shuffle=True, pin_memory=True)
-        imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
-        # Fit the computation system using the dataloaders and epochs
-        self._cs.fit((imagemask_dataloader, epochs[0]), (imagelabel_dataloader, epochs[1]))
+        if self.seg_data:
+            imagemask_dataloader = DataLoader(self.seg_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+            imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+            # Fit the computation system using the dataloaders and epochs
+            if type(epochs) == tuple:
+                self._cs.fit((imagemask_dataloader, epochs[0]), (imagelabel_dataloader, epochs[1]))
+            else:
+                self._cs.fit((imagemask_dataloader, epochs), (imagelabel_dataloader, epochs))
+        else:
+            imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+            self._cs.fit(None, (imagelabel_dataloader, epochs))
+        # TODO: this should have memory training somehow, maybe define how many images do we want to train on and random sample them
 
     def save(self, save_file: str) -> None:
         """Save the current object to a file.
@@ -117,6 +126,9 @@ class Boris(object):
         obj = cls(**params["Boris"])  # Create a Boris instance with the parameters extracted from the config
         if params.get("Training", {}):
             # If there are training parameters specified in the config
-            obj.fit(tuple(params["Training"]["epochs"]), params["Training"]["batch_size"])  # Fit the Boris instance with the specified epochs and batch size
+            if type(params["Training"]["epochs"]) == int:
+                obj.fit((params["Training"]["epochs"]), params["Training"]["batch_size"])  # Fit the Boris instance with the specified epochs and batch size
+            else:
+                obj.fit(tuple(params["Training"]["epochs"]), params["Training"]["batch_size"])  # Fit the Boris instance with the specified epochs and batch size
             obj.save(params["Training"]["save_file"])  # Save the trained Boris instance to the specified save file
         return obj  # Return the created Boris instance

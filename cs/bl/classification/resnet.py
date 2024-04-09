@@ -1,6 +1,7 @@
 from __future__ import annotations
 import torch
 import torch.nn as nn
+from ss import StorageSystem, MemoryNode
 
 
 class ResBlock(nn.Module):
@@ -114,7 +115,7 @@ class ResNet(nn.Module):
             num_classes (int): The number of classes.
         """
         self._num_classes = num_classes  # Set the number of classes
-        self.fc = nn.Linear(in_features=(512 * ResBlock.expansion), out_features=num_classes)  # Update the fully connected layer with the new number of classes
+        self.fc = nn.Linear(in_features=(512 * ResBlock.expansion), out_features=num_classes).to(torch.device("cuda:0" if torch.cuda.is_available() else "cpu"))  # Update the fully connected layer with the new number of classes
 
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         """Forward pass of the network.
@@ -123,10 +124,19 @@ class ResNet(nn.Module):
         Returns:
             torch.Tensor: Output tensor after passing through the network.
         """
+        #TODO: change how the feature maps are accessed instead of having it this way
         X = self.input(X)  # Pass the input through the initial layers
-        # Pass the input through each layer in the network
-        for layer in self.network:
-            X: torch.Tensor = layer(X)
+        for i, layer in enumerate(self.network):
+            X: torch.Tensor = layer(X)  # Pass the input through each layer in the network
+            if self.training:
+                continue
+            if i == 0:
+                _low_level_features = X.clone()  # Store the low-level features at the first layer
+            elif i == len(self.network) - 1:
+                _high_level_features = X.clone()  # Store the high-level features at the last layer
+        if not self.training:
+            # Create a MemoryNode with the stored low-level and high-level features and assign it to the most recent node in the StorageSystem
+            StorageSystem().most_recent_node = MemoryNode((_low_level_features, _high_level_features))
         X = self.avgpool(X)  # Apply adaptive average pooling
         X = X.reshape(X.shape[0], -1)  # Reshape the tensor to a 2D shape for the fully connected layer
         # Pass the reshaped tensor through the fully connected layer for classification
