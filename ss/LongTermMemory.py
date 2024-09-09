@@ -4,7 +4,7 @@ from typing import List
 
 class LongTermMemory:
     T_REMEMBER = 30  # Threshold for remembering
-    T_RECOGNITION = 0.9  # Similarity threshold for recognition
+    T_RECOGNITION = 0.95  # Similarity threshold for recognition
 
     def __init__(self) -> None:
         """Initialize the LongTermMemory object."""
@@ -18,7 +18,8 @@ class LongTermMemory:
         # Perform recognition process and update connected nodes' hotness
         for node_id in self.memory.keys():
             # Compute the similarity between the new node and existing nodes
-            similarity = node - self.memory[node_id]
+            similarity = (node - self.memory[node_id]) * 230
+            # print(similarity)
             # If the similarity meets the recognition threshold, add the connection
             if similarity >= self.T_RECOGNITION:
                 node.connected_nodes[node_id] = similarity

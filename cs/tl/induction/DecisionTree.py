@@ -148,11 +148,20 @@ class DecisionTree:
             int: label for the given features
         """
         if isinstance(tree, LeafNode):
-            return tree.label  # returns the label when at a leaf node
-        # recursivelly delve deeper into the tree untill a leaf node is found
-        if X[tree.split_data["feature_index"]] <= tree.split_data["threshold"]:
+            return tree.label  # Return the label when at a leaf node
+        
+        # Ensure tree.split_data is properly defined and accessed
+        if 'feature_index' in tree.split_data and 'threshold' in tree.split_data:
+            feature_index = tree.split_data["feature_index"]
+            threshold = tree.split_data["threshold"]
+        else:
+            raise ValueError("Tree node split_data is not properly defined.")
+
+        # Recursive descent based on the split condition
+        if X[int(feature_index)] <= threshold:
             return self._make_prediction(X, tree.left)
-        return self._make_prediction(X, tree.right)
+        else:
+            return self._make_prediction(X, tree.right)
 
     def __call__(self, X: np.ndarray) -> np.ndarray:
-        return np.array([self._make_prediction(x, self.root) for x in X])  # returns the predicted values
+        return np.array(self._make_prediction(X, self.root))  # returns the predicted values

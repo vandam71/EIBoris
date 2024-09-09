@@ -1,7 +1,7 @@
 import torch
 import warnings
 from tqdm import tqdm
-from typing import Any, Tuple
+from typing import Any, Tuple, Union
 from torch.utils.data import DataLoader
 from functools import singledispatchmethod
 from .segmentation import SegmentationNetwork
@@ -44,7 +44,7 @@ class BottomLevel(object):
             self.segmenter.train(enable)  # Set the training mode of the segmenter.
         self.classifier.train(enable)  # Set the training mode of the classifier.
 
-    def fit(self, segmentation: Tuple[DataLoader, int] = None, classification: Tuple[DataLoader, int] = None):
+    def fit(self, segmentation: Tuple[DataLoader, int] = None, classification: Tuple[DataLoader, int, Union[torch.tensor, None]] = None):
         """Trains the BottomLevel model. Can be used for both segmentation and classification.
         The training can be done for both segmentation and classification.
         Args:
@@ -52,21 +52,20 @@ class BottomLevel(object):
             classification (Tuple[DataLoader, int], optional): classification tuple with the DataLoader and the number of epochs for training. Defaults to None.
             use_segmentation (bool, optional): enables if the classification network will use segmentation as a pre-processor for it's data. Defaults to True.
         """
+        # Check and validate segmentation data and epochs
         if segmentation and self.segmenter is not None:
             segmentation_data, seg_epochs = segmentation
             assert isinstance(segmentation_data, DataLoader) and isinstance(seg_epochs, int)
-        if classification:
-            classification_data, class_epochs = classification
-            assert isinstance(classification_data, DataLoader) and isinstance(class_epochs, int)
-        # Perform segmentation training if specified
-        if segmentation and self.segmenter is not None:
             self.segmenter.fit(segmentation_data, epochs=seg_epochs)
-        # Check if segmentation is enabled but no previous training is found
-        if self.segmenter is None or self.segmenter.prev_training is None:
-            warnings.warn("Segmentation is enabled but no previous training was found.")
-        # Perform classification training if specified
+            if self.segmenter.prev_training is None:
+                warnings.warn("Segmentation is enabled but no previous training was found.")
+        
+        # Check and validate classification data, epochs, and pos_weight
         if classification:
-            self.classifier.fit(classification_data, epochs=class_epochs)
+            classification_data, class_epochs, pos_weight = classification
+            assert isinstance(classification_data, DataLoader) and isinstance(class_epochs, int)
+            self.classifier.fit(classification_data, class_epochs, pos_weight)
+
 
     def __call__(self, *args: Any, **kwds: Any) -> Any:
         # Call the 'forward' method with the provided arguments and keyword arguments.
@@ -75,7 +74,7 @@ class BottomLevel(object):
     @singledispatchmethod
     def forward(self, X: torch.Tensor) -> torch.Tensor:
         # Check if segmentation is enabled but no previous training was found
-        if self.segmenter is None or self.segmenter.prev_training is None:
+        if self.segmenter and self.segmenter.prev_training is None:
             warnings.warn("Segmentation is enabled but no previous training was found.")
         # Check if classifier training is available
         if self.classifier.prev_training is None:

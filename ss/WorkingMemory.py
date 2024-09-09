@@ -33,7 +33,7 @@ class WorkingMemory:
         """
         # First iteration where the memory only has one node
         if len(self.memory) == 1:
-            return []
+            return [0.5, 0.5, 0.5]
         total_influence = []  # Initialize empty influence list
         for node in self.memory[:-1]:
             # Use hot index to balance the final decision

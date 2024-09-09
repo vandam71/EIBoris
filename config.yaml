@@ -1,19 +1,20 @@
 Boris:
-  # segmentation: K:\Dataset\masks
-  classification: C:\Users\rafae\Desktop\Git\EIBoris\medical_mnist
-  size: [64, 64]
+  segmentation: C:\Users\Rafael\Documents\Dataset\masks
+  classification: C:\Users\Rafael\Documents\Dataset\nih
+  size: [224, 224]
   # num_classes: 3
   Computation:
     Bottom:
-      # attention: true
+      attention: true
       net_type: resnet50
-      use_segmentation: false
+      use_segmentation: true
     Top:
       min_samples_split: 4
       max_depth: None
   Storage:
     wm_size: 7
 Training:
-  epochs: 16
-  save_file: trained_mnist_224_8_16.boris
+  weighted: true
+  epochs: [8, 16]
+  save_file: trained_nih_short_224_s8_c16_b32_4_None_wm7.boris
   batch_size: 32

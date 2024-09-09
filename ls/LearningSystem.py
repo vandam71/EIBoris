@@ -2,14 +2,13 @@ from __future__ import annotations
 
 # This module will have the learning methods and functions to be used by the computation system for learning.
 import torch
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 if TYPE_CHECKING:
     from cs.bl.classification import ClassificationNetwork
     from cs.bl.segmentation import SegmentationNetwork
 
 EPS = 1e-8  # small value to avoid division by zero
-
 
 # TP = [i, i]                   # true positives have the same true label and predicted label
 # FP = [i, :] - TP              # false positives are the ones that are in the same collumn (were predicted but are not true)
@@ -28,13 +27,14 @@ class LearningSystem(object):
         self.segmenter_learn = {}  # Dictionary to store segmenter learning-related information
         # Configures optimizer and scheduler for the classifier
         classifier.optim = self.classifier_learn["optimiser"] = torch.optim.SGD(classifier.model.parameters(), lr=1e-4, momentum=0.9)
-        classifier.scheduler = self.classifier_learn["scheduler"] = torch.optim.lr_scheduler.StepLR(self.classifier_learn["optimiser"], step_size=8, gamma=0.1, verbose=True)
+        classifier.scheduler = self.classifier_learn["scheduler"] = torch.optim.lr_scheduler.StepLR(self.classifier_learn["optimiser"], step_size=8, gamma=0.1)
         # Configures optimizer and scheduler for the segmenter
-        segmenter.optim = self.segmenter_learn["optimiser"] = torch.optim.Adam(segmenter.model.parameters(), lr=1e-4)
-        segmenter.scheduler = self.segmenter_learn["scheduler"] = torch.optim.lr_scheduler.ReduceLROnPlateau(self.segmenter_learn["optimiser"], "min", patience=2, verbose=True)
+        if segmenter:
+            segmenter.optim = self.segmenter_learn["optimiser"] = torch.optim.Adam(segmenter.model.parameters(), lr=1e-4)
+            segmenter.scheduler = self.segmenter_learn["scheduler"] = torch.optim.lr_scheduler.ReduceLROnPlateau(self.segmenter_learn["optimiser"], "min", patience=2)
 
     @staticmethod
-    def confusion_matrix(preds: torch.Tensor, targets: torch.Tensor) -> torch.Tensor:
+    def confusion_matrix(preds: torch.Tensor, targets: torch.Tensor, num_classes: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """Calculates the confusion matrix for the given predictions and targets.
         Args:
             preds (torch.Tensor): 1D tensor of predicted labels.
@@ -43,15 +43,34 @@ class LearningSystem(object):
             torch.Tensor: 2D tensor with the confusion matrix.
         """
         # Creates a tensor with the shape (2, 2) for binary classification
-        confusion = torch.zeros(2, 2, dtype=int)
+        confusion = torch.zeros((num_classes, 2, 2), dtype=torch.int64, device=preds.device)
         # Iterates over the prediction/target pairs and increments to the coordinates of these pairs
         # When the prediction is the same as the true label, the value is incremented in the diagonal meaning that the prediction is correct
         # The difference between the prediction and the true label means either a false positive or a false negative.
-        preds = preds.flatten()
-        targets = targets.flatten()
-        for p, t in zip(preds, targets):
-            confusion[p, t] += 1
-        return confusion
+        # preds = preds.flatten()
+        # targets = targets.flatten()
+
+        true_positive_count = 0
+
+        for i in range(num_classes):
+            confusion[i, 0, 0] = ((targets[:, i] == 1) & (preds[:, i] == 1)).sum().item()  # True Positives
+            confusion[i, 0, 1] = ((targets[:, i] == 0) & (preds[:, i] == 1)).sum().item()  # False Positives
+            confusion[i, 1, 0] = ((targets[:, i] == 1) & (preds[:, i] == 0)).sum().item()  # False Negatives
+            confusion[i, 1, 1] = ((targets[:, i] == 0) & (preds[:, i] == 0)).sum().item()  # True Positives
+            
+            true_positive_count += ((targets[:, i] == 1) & (preds[:, i] == 1)).sum().item()
+
+            # print(LearningSystem.f1_score(confusion[i]))
+            #print(tp, tn, fp, fn, confusion)
+            #print(targets, preds)
+
+            #print(LearningSystem.accuracy(confusion[0]))
+
+            #exit()
+
+        # print(confusion)
+
+        return torch.sum(confusion, dim=0), confusion
 
     @staticmethod
     def accuracy(conf_matrix: torch.Tensor) -> torch.Tensor:
@@ -61,6 +80,7 @@ class LearningSystem(object):
         Returns:
             torch.Tensor: One element tensor with the overall accuracy.
         """
+
         return conf_matrix.diagonal().sum() / (conf_matrix.sum() + EPS)
 
     @staticmethod
@@ -71,6 +91,7 @@ class LearningSystem(object):
         Returns:
             torch.Tensor: 1D tensor with the accuracy for each class.
         """
+        
         TP = torch.diag(conf_matrix)
         FP = conf_matrix.sum(dim=0) - TP
         FN = conf_matrix.sum(dim=1) - TP

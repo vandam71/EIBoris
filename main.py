@@ -53,4 +53,13 @@ def random_boris():
 
 if __name__ == "__main__":
     setup()
+    from ss import StorageSystem
     boris = Boris.from_config("./config.yaml")
+    # boris = Boris.load("./trained_pneumonia_224_s8_c16_b32_4_None_wm7.boris")
+    # boris._ss = StorageSystem(7)
+    # data_loader = DataLoader(boris.class_data, batch_size=64, shuffle=False)
+    # for batch_idx, (images, labels) in enumerate(data_loader):
+    #     for i in range(len(images)):
+    #         boris(images[i].unsqueeze(0))
+    #         # pprint(boris._ss.working_memory.memory)
+    #     boris._ss.long_term_memory.draw_ltm()

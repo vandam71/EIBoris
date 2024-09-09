@@ -3,7 +3,7 @@ import numpy as np
 from .tl import TopLevel
 from .bl import BottomLevel
 from ss import StorageSystem
-from typing import Tuple, List
+from typing import Tuple, List, Union
 from torch.utils.data import DataLoader
 
 
@@ -22,7 +22,7 @@ class ComputationSystem(object):
         self._bl = BottomLevel(num_classes, attention, net_type, use_segmentation)
         self._tl = TopLevel(min_samples_split, max_depth)
 
-    def fit(self, segmentation: Tuple[DataLoader, int] = None, classification: Tuple[DataLoader, int] = None) -> None:
+    def fit(self, segmentation: Tuple[DataLoader, int] = None, classification: Tuple[DataLoader, int, Union[torch.tensor, None]] = None) -> None:
         """Fits the ComputationSystem to the given datasets.
         Args:
             segmentation (Tuple[DataLoader, int], optional): Segmentation dataset and number of epochs for training. Defaults to None.
@@ -50,5 +50,5 @@ class ComputationSystem(object):
         StorageSystem().most_recent_node.data.probabilities = probability  # updates the probabilities in the memory node
         labels: np.ndarray = self._tl(np.array(probability))  # forwards the probability in the top-level
         StorageSystem().most_recent_node.data.classification = labels  # updates the classifications in the memory node
-        labels = labels.tolist()[0]  # converts the labels numpy array to a list
+        labels = labels.tolist()  # converts the labels numpy array to a list
         return (probability, labels)

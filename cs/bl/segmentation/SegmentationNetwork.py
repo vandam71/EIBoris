@@ -45,12 +45,15 @@ class SegmentationNetwork(nn.Module):
         results = []  # List to store the results of each epoch
         since = time.time()  # Time at the start of training
         for epoch in range(epochs):
-            print(f"Epoch {epoch+1}/{epochs}")
+            print(f"\nEpoch {epoch+1}/{epochs}: Learning rate is {self.scheduler.get_last_lr()[0]}")
             epoch_results = self.epoch_train(e_data=dataloader)  # Trains the network on the current epoch
             with ignore_warning(UserWarning):  # A UserWarning is sometimes triggered because of desynchronization, it is not relavant so this context is used to avoid it
                 self.scheduler.step(sum(epoch_results[:, 0]) / len(dataloader))  # Adjusts the learning rate based on the average loss
             # Print training metrics for the current epoch
-            print(f"Loss: {sum(epoch_results[:, 0])/len(dataloader)}; Dice score: {sum(epoch_results[:, 1])/len(dataloader)}; Accuracy: {sum(epoch_results[:, 2])/len(dataloader)*100:.2f}%; IoU: {sum(epoch_results[:, 3])/len(dataloader)}\n")
+            print(f"Loss: {epoch_results[:, 0].mean():.4f}")
+            print(f"Dice score: {epoch_results[:, 1].mean():.4f}")
+            print(f"Accuracy: {epoch_results[:, 2].mean():.4f}")
+            print(f"IoU: {epoch_results[:, 3].mean():.4f}")
             results.append(epoch_results)  # Stores the epoch results
         time_elapsed = time.time() - since  # Total training time
         print(f"Training complete in {time_elapsed // 60:.0f}m {time_elapsed % 60:.0f}s")
@@ -65,9 +68,18 @@ class SegmentationNetwork(nn.Module):
             torch.Tensor: returns the epoch_metrics for training
         """
         epoch_metrics = torch.zeros(0, 4)  # Initializes an empty tensor to store the metrics
-        for images, labels in tqdm(e_data, unit=" batch"):  # Iterates over the batches of training images and labels
+
+        pbar = tqdm(e_data, unit=" batch")
+        for images, labels in pbar:  # Iterates over the batches of training images and labels
             batch_metrics = self.batch_train(b_data_x=images, b_data_y=labels)  # Trains on a single batch of training images and labels
             epoch_metrics = torch.cat([epoch_metrics, batch_metrics], dim=0)  # Concatenates the batch metrics to the epoch metrics tensor
+            pbar.set_postfix({
+                'Loss': batch_metrics[0][0].item(),
+                'Dice score': batch_metrics[0][1].item(),
+                'Accuracy': batch_metrics[0][2].item(),
+                'IoU': batch_metrics[0][3].item()
+            })
+        
         return epoch_metrics
 
     def batch_train(self, b_data_x: torch.Tensor, b_data_y: torch.Tensor) -> torch.Tensor:

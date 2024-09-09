@@ -2,6 +2,7 @@ import os
 import gc
 import yaml
 import torch
+import numpy as np
 import pandas as pd
 from PIL import Image
 from torchvision.datasets import ImageFolder
@@ -13,8 +14,9 @@ from typing import Type, Union, Tuple, TypeVar, ParamSpec, Callable, List
 def setup():
     gc.collect()
     if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = True
         torch.cuda.empty_cache()
-        torch.cuda.reset_max_memory_allocated()
+        torch.cuda.reset_peak_memory_stats()
         torch.cuda.synchronize()
 
 
@@ -179,13 +181,20 @@ class CustomDataset(Dataset):
         if torch.is_tensor(idx):
             idx: list = idx.tolist()  # Convert the index to a list if it's a tensor
         img_path = os.path.join(self.base_dir, self.image_folder, self.data.iloc[idx, 0])  # Get the image path
-        labels = self.data.iloc[idx, 1:]  # Get the labels for the item
+
+        labels = self.data.iloc[idx, 1:].values  # Get the labels for the item
+        labels = np.array(labels, dtype=np.float32)
+
+        label_tensor = torch.from_numpy(labels)  # Convert the labels to a tensor
+
         img = to_tensor(Image.open(img_path).convert("RGB"))  # Open the image and convert it to a tensor
+
         # Check if the image size matches the expected size
         assert [img.shape[1], img.shape[2]] == self.expected_size
+
         if self.transform:
             img = self.transform(img)  # Apply the data transformation function to the image
-        label_tensor = torch.tensor(labels, dtype=torch.float32)  # Convert the labels to a tensor
+
         return img, label_tensor
 
 

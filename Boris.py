@@ -1,6 +1,7 @@
 from __future__ import annotations
 import torch
 import numpy as np
+from tqdm import tqdm
 from ss import StorageSystem
 from ls import LearningSystem
 from cs import ComputationSystem
@@ -71,27 +72,44 @@ class Boris(object):
         wm_influence = self._ss.working_memory.get_influence()  # Get the influence from the working memory
         alpha, beta, omega = 0.33, 0.33, 0.33  # Define weights for combining the outputs
         # Calculate and store the final decision in the current node's data
+
         StorageSystem().most_recent_node.data.final_decision = ((np.array(probabilities) * alpha + np.array(labels) * beta + np.array(wm_influence) * omega) / 3).tolist()
         return StorageSystem().most_recent_node.data.final_decision  # Return the final decision
 
-    def fit(self, epochs: Union[Tuple[int, int], int], batch_size: int = 32) -> None:
+    def fit(self, epochs: Union[Tuple[int, int], int], batch_size: int = 32, weighted: bool = False) -> None:
         """Trains the model on the provided datasets.
         Args:
             epochs (Tuple[int, int]): The number of epochs to train the segmentation and classification models.
             batch_size (int, optional): The batch size for training. Defaults to 32.
         """
+        imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+
+        pos_weight = None
+
+        if weighted:
+            num_classes = len(self.class_data.class_names)
+            positive_counts = torch.zeros(num_classes)
+            for batch in tqdm(imagelabel_dataloader):
+                inputs, targets = batch
+                positive_counts += targets.sum(dim=0)
+            total_samples = len(imagelabel_dataloader.dataset)
+            negative_counts = total_samples - positive_counts
+            pos_weight = negative_counts / (positive_counts + 1e-5)
+            # pos_weight = pos_weight.view(-1, 1)
+            # pos_weight = pos_weight.expand(batch_size, num_classes, 1)
+
+            # print(pos_weight.shape, pos_weight)
+            # exit()
+            print('Class Weights', pos_weight.tolist())
+
         # Create dataloaders for image masks and image labels
         if self.seg_data:
             imagemask_dataloader = DataLoader(self.seg_data, batch_size=batch_size, shuffle=True, pin_memory=True)
-            imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+            epochs_seg, epochs_class = (epochs, epochs) if not isinstance(epochs, tuple) else epochs
             # Fit the computation system using the dataloaders and epochs
-            if type(epochs) == tuple:
-                self._cs.fit((imagemask_dataloader, epochs[0]), (imagelabel_dataloader, epochs[1]))
-            else:
-                self._cs.fit((imagemask_dataloader, epochs), (imagelabel_dataloader, epochs))
+            self._cs.fit((imagemask_dataloader, epochs_seg), (imagelabel_dataloader, epochs_class, pos_weight))
         else:
-            imagelabel_dataloader = DataLoader(self.class_data, batch_size=batch_size, shuffle=True, pin_memory=True)
-            self._cs.fit(None, (imagelabel_dataloader, epochs))
+            self._cs.fit(None, (imagelabel_dataloader, epochs, pos_weight))
         # TODO: this should have memory training somehow, maybe define how many images do we want to train on and random sample them
 
     def save(self, save_file: str) -> None:
@@ -113,7 +131,7 @@ class Boris(object):
         return instance
 
     @classmethod
-    def from_config(cls, config_file: str) -> Boris:
+    def from_config(cls, config_file: str, load_only: bool = False) -> Boris:
         """Create a Boris instance from a configuration file.
         Args:
             config_file (str): The path to the configuration file.
@@ -124,11 +142,25 @@ class Boris(object):
         parser.parse()  # Parse the configuration file
         params = parser.get_variables()  # Get the variables from the parsed configuration file
         obj = cls(**params["Boris"])  # Create a Boris instance with the parameters extracted from the config
+        print("New Boris instance started")
+
+        # Print all configurations
+        print("\n--- Configuration Details ---")
+        for section, settings in params.items():
+            print(f"[{section}]")
+            for key, value in settings.items():
+                print(f"{key}: {value}")
+            print()
+        if load_only is True:
+            return obj
         if params.get("Training", {}):
             # If there are training parameters specified in the config
             if type(params["Training"]["epochs"]) == int:
-                obj.fit((params["Training"]["epochs"]), params["Training"]["batch_size"])  # Fit the Boris instance with the specified epochs and batch size
+                print(f"Training with epochs: {params['Training']['epochs']}, batch_size: {params['Training']['batch_size']}, weighted: {params["Training"].get('weighted', False)}\n")
+                obj.fit(params["Training"]["epochs"], params["Training"]["batch_size"], params["Training"].get('weighted', False))  # Fit the Boris instance with the specified epochs and batch size
             else:
-                obj.fit(tuple(params["Training"]["epochs"]), params["Training"]["batch_size"])  # Fit the Boris instance with the specified epochs and batch size
+                print(f"Training with epochs: {tuple(params['Training']['epochs'])}, batch_size: {params['Training']['batch_size']}, weighted: {params["Training"].get('weighted', False)}")
+                obj.fit(tuple(params["Training"]["epochs"]), params["Training"]["batch_size"], params["Training"].get('weighted', False))  # Fit the Boris instance with the specified epochs and batch size
+            print(f"Saving trained model to: {params['Training']['save_file']}")
             obj.save(params["Training"]["save_file"])  # Save the trained Boris instance to the specified save file
         return obj  # Return the created Boris instance

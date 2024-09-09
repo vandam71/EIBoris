@@ -37,8 +37,17 @@ class DecisionForest:
         Returns:
             np.ndarray: array of predicted labels
         """
+
+        preds = []
+        for dt in self.dts:
+            preds.append(self._predict_dt((dt, X)))
+
+        preds = np.array(preds).T
+
+        return preds  # Transpose to get predictions in shape (num_samples, num_trees)
+
         num_processes = mp.cpu_count()
-        pool = mp.Pool(num_processes)
+        pool = mp.Pool(num_processes if num_processes < len(self.dts) else len(self.dts))
         preds = pool.map(self._predict_dt, [(dt, X) for dt in self.dts])  # predicts for each of the decision tree
         pool.close()  # waits for the process to finish
         pool.join()
@@ -57,6 +66,7 @@ class DecisionForest:
         # Creates a DecisionTree instance from the arguments
         dt = DecisionTree(min_samples_split=min_samples_split, max_depth=max_depth)
         dt.fit(X, column)  # Fit the decision tree
+        print(f"DecisionTree on class {i} depth: {dt.lowest_depth}")
         return dt  # Returns the constructed decision tree
 
     @staticmethod
